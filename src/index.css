@@ -1,0 +1,30 @@
+@import url('https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&family=Comic+Neue:wght@400;700;800&family=Quicksand:wght@500;600;700&display=swap');
+@import "tailwindcss";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme {
+  --font-sans: "Nunito", ui-sans-serif, system-ui, sans-serif;
+  --font-comic: "Comic Neue", cursive;
+  --font-quicksand: "Quicksand", sans-serif;
+  
+  --color-purple-light: #eaddfb;
+  --color-purple-medium: #c084fc;
+  --color-purple-deep: #8b5cf6;
+  --color-purple-bg: #8050f2;
+}
+
+@layer base {
+  body {
+    @apply font-sans antialiased bg-[#8050f2] text-slate-800;
+  }
+}
+
+@layer utilities {
+  .shadow-soft {
+    box-shadow: 0 10px 40px -10px rgba(0,0,0,0.08);
+  }
+  .shadow-float {
+    box-shadow: 0 20px 40px -15px rgba(139, 92, 246, 0.4);
+  }
+}
