@@ -346,9 +346,14 @@ export const VowelModule = () => {
                     <div className="w-12 h-12 sm:w-14 sm:h-14 bg-white dark:bg-slate-800 rounded-full flex items-center justify-center shrink-0 shadow-sm group-hover:bg-blue-500 transition-colors">
                       <Volume2 className="w-6 h-6 sm:w-7 sm:h-7 text-blue-600 group-hover:text-white transition-colors" strokeWidth={2.5} />
                     </div>
-                    <h2 className="flex-1 text-left font-extrabold text-blue-900 dark:text-blue-100 uppercase text-base sm:text-xl leading-tight">
-                      Susun Suku Katanya!
-                    </h2>
+                    <div className="flex-1 flex flex-col items-start leading-tight">
+                       <h2 className="text-left font-extrabold text-blue-900/80 dark:text-blue-100/80 uppercase text-[10px] sm:text-xs">
+                         Susun Suku Katanya!
+                       </h2>
+                       <p className="font-black text-xl sm:text-2xl text-blue-800 dark:text-blue-100 uppercase mt-0.5">
+                         "{currentQuiz.target}"
+                       </p>
+                    </div>
                   </button>
 
                   {/* Hint / Petunjuk Blok - MAXIMIZED VIEW */}
@@ -378,7 +383,7 @@ export const VowelModule = () => {
                               <span className={`text-[7vh] sm:text-[9vh] font-black leading-none ${!quizInput[idx] ? 'opacity-20' : ''}`}>
                                 {quizInput[idx] 
                                    ? (settings.isCapital ? quizInput[idx].toUpperCase() : quizInput[idx].toLowerCase()) 
-                                   : (settings.isCapital ? syl.toUpperCase() : syl.toLowerCase())}
+                                   : ''}
                               </span>
                               {IconTemplate && (
                                 <motion.span initial={{ scale: 0 }} animate={{ scale: 1 }} className="absolute -top-3 -right-3 bg-white dark:bg-slate-800 rounded-full shadow-sm p-1 border border-slate-100">

@@ -282,9 +282,14 @@ export const SentenceModule = () => {
                     <div className="w-12 h-12 sm:w-14 sm:h-14 bg-white dark:bg-slate-800 rounded-full flex items-center justify-center shrink-0 shadow-sm group-hover:bg-green-500 transition-colors">
                       <Volume2 className="w-6 h-6 sm:w-7 sm:h-7 text-green-600 group-hover:text-white transition-colors" strokeWidth={2.5} />
                     </div>
-                    <h2 className="flex-1 text-left font-extrabold text-green-900 dark:text-green-100 uppercase text-base sm:text-xl leading-tight">
-                      Susun Kalimatnya!
-                    </h2>
+                    <div className="flex-1 flex flex-col items-start leading-tight">
+                       <h2 className="text-left font-extrabold text-green-900/80 dark:text-green-100/80 uppercase text-[10px] sm:text-xs">
+                         Susun Kalimatnya!
+                       </h2>
+                       <p className="font-black text-xl sm:text-2xl text-green-800 dark:text-green-100 uppercase mt-0.5">
+                         "{currentQuiz.target}"
+                       </p>
+                    </div>
                   </button>
 
                   {/* Answer Slots Display (Petunjuk Visual) - MAXIMIZED VIEW */}
@@ -292,7 +297,7 @@ export const SentenceModule = () => {
                     <AnimatePresence>
                       {currentQuiz.splits.map((expectedText: string, i: number) => {
                          const isFilled = i < answerSlots.length;
-                         const slotText = isFilled ? answerSlots[i] : expectedText;
+                         const slotText = isFilled ? answerSlots[i] : '';
                          
                          let slotClass = 'bg-slate-200/50 dark:bg-slate-700/50 text-slate-300 dark:text-slate-600 border-2 border-slate-300 dark:border-slate-600 border-dashed'; // Default empty
                          
@@ -312,10 +317,10 @@ export const SentenceModule = () => {
                         <motion.div 
                           key={`slot-${i}`} 
                           animate={isFilled ? { scale: [1, 1.1, 1] } : {}}
-                          className={`${slotClass} px-4 py-3 sm:px-6 sm:py-5 rounded-2xl sm:rounded-[2rem] text-[4vh] sm:text-4xl font-black relative flex items-center justify-center min-w-[80px] sm:min-w-[100px] transition-colors`}
+                          className={`${slotClass} px-4 py-3 sm:px-6 sm:py-5 rounded-2xl sm:rounded-[2rem] text-[4vh] sm:text-4xl font-black relative flex items-center justify-center min-w-[80px] sm:min-w-[100px] min-h-[60px] sm:min-h-[80px] transition-colors`}
                         >
                           <span className={`translate-y-1 leading-none ${!isFilled ? 'opacity-30' : ''}`}>
-                            {settings.isCapital ? slotText.toUpperCase() : slotText.toLowerCase()}
+                            {slotText ? (settings.isCapital ? slotText.toUpperCase() : slotText.toLowerCase()) : ''}
                           </span>
                           {IconTemplate && (
                             <motion.span initial={{ scale: 0 }} animate={{ scale: 1 }} className="absolute -top-3 -right-3 bg-white dark:bg-slate-800 rounded-full shadow-sm p-1 border border-slate-100">
