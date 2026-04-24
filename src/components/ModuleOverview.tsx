@@ -18,6 +18,8 @@ interface ModuleOverviewProps {
   hasQuiz?: boolean;
 }
 
+import { BottomNav } from '../components/BottomNav';
+
 export const ModuleOverview: React.FC<ModuleOverviewProps> = ({
   title,
   description,
@@ -46,7 +48,7 @@ export const ModuleOverview: React.FC<ModuleOverviewProps> = ({
           <div className="flex-1"></div>
         </div>
 
-        <div className="flex-1 flex flex-col px-6 overflow-y-auto no-scrollbar pb-24">
+        <div className="flex-1 flex flex-col px-6 overflow-y-auto no-scrollbar pb-[120px]">
           <motion.div 
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -105,6 +107,7 @@ export const ModuleOverview: React.FC<ModuleOverviewProps> = ({
             )}
           </div>
         </div>
+        <BottomNav />
       </div>
     </div>
   );

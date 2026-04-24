@@ -7,12 +7,14 @@ export interface CardSettings {
   isCapital: boolean;
   fontType: FontType;
   size: SizeType;
+  ttsEnabled: boolean;
 }
 
 const defaultSettings: CardSettings = {
   isCapital: true,
   fontType: 'comic',
-  size: 'md'
+  size: 'md',
+  ttsEnabled: true
 };
 
 interface SettingsContextType {

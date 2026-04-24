@@ -7,8 +7,6 @@ import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { Home } from './pages/Home';
 import { MockPage } from './pages/MockPages';
-import { UIKit } from './pages/UIKit';
-import { QCNav } from './components/QCNav';
 import { Profile } from './pages/Profile';
 import { History } from './pages/History';
 import { Leaderboard } from './pages/Leaderboard';
@@ -51,10 +49,8 @@ function AppContent() {
         <Route path="/vokalm" element={<PrivateRoute><VowelModule /></PrivateRoute>} />
         <Route path="/sentence" element={<PrivateRoute><SentenceModule /></PrivateRoute>} />
         
-        <Route path="/uikit" element={<UIKit />} />
         <Route path="*" element={<Navigate to="/home" replace />} />
       </Routes>
-      <QCNav />
     </>
   );
 }

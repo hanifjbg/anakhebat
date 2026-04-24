@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, ChevronLeft, ChevronRight, Play, Volume2, RefreshCcw, BookOpen } from 'lucide-react';
+import { ArrowLeft, ChevronLeft, ChevronRight, Play, Volume2, RefreshCcw, BookOpen, ThumbsUp, Frown } from 'lucide-react';
 import { BottomNav } from '../components/BottomNav';
 import { ModuleCard } from '../components/ModuleCard';
 import { Button } from '../components/ui/Button';
@@ -12,6 +12,7 @@ import { QuizSummary } from '../components/quiz/QuizSummary';
 import { ModuleOverview } from '../components/ModuleOverview';
 import { useApp } from '../contexts/AppContext';
 import { motion, AnimatePresence } from 'motion/react';
+import { TTSEngine } from '../services/TTSEngine';
 
 const groups = [
   ['A', 'I', 'U', 'E', 'O'],
@@ -113,22 +114,21 @@ export const VowelModule = () => {
 
   const QUIZ_TOTAL = 5;
 
-  const speak = useCallback((text: string, id?: string) => {
+  const speak = useCallback(async (text: string, id?: string) => {
     if (id) setActiveItem(id);
-    if ('speechSynthesis' in window) {
-      window.speechSynthesis.cancel();
-      const msg = new SpeechSynthesisUtterance(text.toLowerCase());
-      msg.lang = 'id-ID';
-      msg.rate = 0.8;
-      const userName = appState.user?.name || '';
-      msg.text = text.includes('Hebat') ? `${text} ${userName}` : msg.text;
-
-      msg.onend = () => {
-        if (id) setActiveItem(prev => prev === id ? null : prev);
-      };
-      window.speechSynthesis.speak(msg);
+    if (!settings.ttsEnabled) {
+      if (id) {
+        setTimeout(() => setActiveItem(prev => prev === id ? null : prev), 1000);
+      }
+      return;
     }
-  }, [appState.user?.name]);
+    
+    await TTSEngine.speak(text, {
+      onEnd: () => {
+        if (id) setActiveItem(prev => prev === id ? null : prev);
+      }
+    });
+  }, [settings.ttsEnabled]);
 
   const generateVowelQuiz = useCallback((item: any) => {
     setCurrentQuiz(item);
@@ -139,10 +139,13 @@ export const VowelModule = () => {
     setScrambled([...item.syllables, ...extras].sort(() => 0.5 - Math.random()));
     setFeedback('none');
     
-    setTimeout(() => speak(item.syllables.join('')), 500);
+    setTimeout(() => {
+      speak(TTSEngine.getQuestionInstruction('vowel', item.syllables.join('')));
+    }, 500);
   }, [speak]);
 
   const startQuiz = () => {
+    TTSEngine.stop();
     const shuffled = [...quizPool].sort(() => 0.5 - Math.random()).slice(0, QUIZ_TOTAL);
     setQuizQueue(shuffled);
     setQuizStep(0);
@@ -152,48 +155,45 @@ export const VowelModule = () => {
     generateVowelQuiz(shuffled[0]);
   };
 
-  const handleSyllableClick = (syl: string) => {
+  const handleSyllableClick = async (syl: string) => {
     if (feedback !== 'none') return;
     const newInput = [...quizInput, syl];
     setQuizInput(newInput);
-    speak(syl);
-
+    
     if (newInput.length === currentQuiz.syllables.length) {
-      const result = newInput.join('') === currentQuiz.syllables.join('');
-      if (result) {
-        setFeedback('correct');
-        setQuizScore(prev => prev + 1);
-        speak('Hebat! ' + currentQuiz.target);
-      } else {
-        setFeedback('wrong');
-        speak('Ayo coba lagi');
-      }
+      const isCorrect = newInput.join('') === currentQuiz.syllables.join('');
+      setFeedback(isCorrect ? 'correct' : 'wrong');
+      
+      if (isCorrect) setQuizScore(prev => prev + 1);
 
-      setTimeout(() => {
-        const next = quizStep + 1;
-        if (next < QUIZ_TOTAL) {
-          setQuizStep(next);
-          generateVowelQuiz(quizQueue[next]);
-        } else {
-          // Finished delay handled by effect
-        }
-      }, 2000);
+      const isLastQuestion = quizStep === QUIZ_TOTAL - 1;
+      const isMilestone = (quizStep > 0 && (quizStep + 1) % Math.ceil(QUIZ_TOTAL / 4) === 0);
+      const feedbackText = TTSEngine.getFeedback(isCorrect, currentQuiz.target, appState.user?.name || '', isMilestone, isLastQuestion);
+      
+      await speak(feedbackText);
+
+      const nextStep = quizStep + 1;
+      if (nextStep < QUIZ_TOTAL) {
+        setQuizStep(nextStep);
+        generateVowelQuiz(quizQueue[nextStep]);
+      } else {
+        setIsQuizFinished(true);
+        const finalScorePercentage = Math.round(((quizScore + (isCorrect ? 1 : 0)) / QUIZ_TOTAL) * 100);
+        const summaryText = TTSEngine.getSummary(finalScorePercentage, appState.user?.name || '');
+        speak(summaryText);
+      }
+    } else {
+      speak(syl); // Just speak single syllable
     }
   };
 
   useEffect(() => {
-    if (isQuizFinished) saveQuizScore('vowel', quizScore);
+    if (isQuizFinished) saveQuizScore('vowel', Math.round((quizScore / QUIZ_TOTAL) * 100));
   }, [isQuizFinished, quizScore, saveQuizScore]);
 
   useEffect(() => {
-    if (feedback !== 'none' && !isQuizFinished) {
-      const timer = setTimeout(() => {
-        const nextStep = quizStep + 1;
-        if (nextStep >= QUIZ_TOTAL) setIsQuizFinished(true);
-      }, 2000);
-      return () => clearTimeout(timer);
-    }
-  }, [feedback, isQuizFinished, quizStep, QUIZ_TOTAL]);
+    return () => TTSEngine.stop();
+  }, []);
 
   if (mode === 'overview') {
     return (
@@ -217,7 +217,7 @@ export const VowelModule = () => {
       <div className="w-full md:max-w-[400px] h-[100dvh] md:h-[calc(100dvh-32px)] bg-[#f8f9fe] dark:bg-slate-900 md:rounded-[40px] shadow-2xl relative overflow-hidden flex flex-col pt-10">
         
         {/* Header */}
-        <div className="px-6 flex items-center justify-between mb-4 shrink-0 z-10 w-full">
+        <div className="px-6 flex items-center justify-between mb-4 shrink-0 relative z-50 w-full">
            <button onClick={() => setMode('overview')} className="w-10 h-10 bg-white dark:bg-slate-800 rounded-full flex items-center justify-center shadow-sm hover:scale-105 active:scale-95 transition-transform">
              <ArrowLeft className="w-5 h-5 text-slate-700 dark:text-slate-300" strokeWidth={2.5} />
            </button>
@@ -242,7 +242,7 @@ export const VowelModule = () => {
             onPageChange={setPage}
             indicatorType="text"
             colorScheme="blue"
-            contentClassName={`flex flex-col justify-center h-full gap-3 w-full max-w-sm mx-auto ${settings.fontType === 'comic' ? 'font-comic' : settings.fontType === 'quicksand' ? 'font-quicksand' : 'font-sans'}`}
+            contentClassName={`justify-center gap-3 w-full max-w-sm mx-auto ${settings.fontType === 'comic' ? 'font-comic' : settings.fontType === 'quicksand' ? 'font-quicksand' : 'font-sans'}`}
             actionButton={<></>}
           >
             <div className="flex flex-col justify-center h-full gap-3 w-full max-w-sm mx-auto">
@@ -279,7 +279,7 @@ export const VowelModule = () => {
             onPageChange={setPracticePage}
             indicatorType="text"
             colorScheme="blue"
-            contentClassName={`flex flex-col justify-center h-full gap-5 w-full max-w-sm mx-auto ${settings.fontType === 'comic' ? 'font-comic' : settings.fontType === 'quicksand' ? 'font-quicksand' : 'font-sans'}`}
+            contentClassName={`justify-center gap-5 w-full max-w-sm mx-auto ${settings.fontType === 'comic' ? 'font-comic' : settings.fontType === 'quicksand' ? 'font-quicksand' : 'font-sans'}`}
             header={
               <div className="flex justify-center mb-0">
                 <span className="px-4 py-1.5 bg-blue-100 text-blue-600 rounded-full font-bold text-sm shadow-sm ring-2 ring-white dark:ring-slate-800">
@@ -313,56 +313,107 @@ export const VowelModule = () => {
         )}
 
         {mode === 'quiz' && (
-          <div className="flex-1 flex flex-col p-6 overflow-y-auto shrink-0">
+          <div className={`flex-1 flex flex-col px-6 overflow-y-auto overflow-x-hidden shrink-0 pb-[120px] no-scrollbar pt-2 ${settings.fontType === 'comic' ? 'font-comic' : settings.fontType === 'quicksand' ? 'font-quicksand' : 'font-sans'}`}>
             {!isQuizFinished ? (
-              <motion.div 
-                key={quizStep}
-                initial={{ opacity: 0, x: 20 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -20 }}
-                className="flex-1 flex flex-col pt-8"
-              >
+              <div className="flex-1 flex flex-col pt-2">
                 <QuizProgress current={quizStep + 1} total={QUIZ_TOTAL} color="bg-blue-500" />
-                
-                <div className="flex-1 flex flex-col items-center justify-center gap-8 pb-32">
+                <motion.div 
+                  key={quizStep}
+                  initial={{ opacity: 0, x: 20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: -20 }}
+                  className="flex-1 flex flex-col items-center gap-6 min-h-0 py-4 relative"
+                >
+                  <AnimatePresence>
+                    {feedback !== 'none' && (
+                      <motion.div 
+                        initial={{ opacity: 0, y: -50, scale: 0.9 }} 
+                        animate={{ opacity: 1, y: 0, scale: 1 }} 
+                        exit={{ opacity: 0, y: -20, scale: 0.9 }}
+                        className={`fixed top-24 left-4 right-4 md:left-1/2 md:-translate-x-1/2 md:w-full md:max-w-lg z-50 py-4 px-6 rounded-3xl font-bold text-center text-white shadow-2xl flex items-center justify-center gap-3 border-4 border-white/20 backdrop-blur-sm ${feedback === 'correct' ? 'bg-green-500' : 'bg-red-500'}`}
+                      >
+                         {feedback === 'correct' ? <ThumbsUp className="w-7 h-7 sm:w-8 sm:h-8" /> : <Frown className="w-7 h-7 sm:w-8 sm:h-8" />}
+                        <span className="text-lg sm:text-xl drop-shadow-sm">{feedback === 'correct' ? 'Hebat! Jawabanmu Benar' : `Kurang tepat, yang benar adalah ${settings.isCapital ? currentQuiz.target.toUpperCase() : currentQuiz.target.toLowerCase()}`}</span>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+
+                  {/* Sound & Instruction Banner */}
                   <button 
-                    onClick={() => speak(currentQuiz.syllables.join(''))}
-                    className="w-24 h-24 bg-blue-100 dark:bg-blue-900/30 rounded-full flex items-center justify-center shadow-lg border-4 border-white dark:border-slate-800 hover:scale-110 active:scale-90 transition-transform group"
+                    onClick={() => speak(TTSEngine.getQuestionInstruction('vowel', currentQuiz.syllables.join('')))}
+                    className="w-full bg-blue-100 dark:bg-blue-900/30 border-2 border-blue-200 dark:border-blue-800 rounded-3xl p-3 sm:p-4 flex items-center gap-4 hover:scale-[1.02] active:scale-[0.98] transition-transform shadow-sm group shrink-0"
                   >
-                    <Volume2 className="w-10 h-10 text-blue-600" />
+                    <div className="w-12 h-12 sm:w-14 sm:h-14 bg-white dark:bg-slate-800 rounded-full flex items-center justify-center shrink-0 shadow-sm group-hover:bg-blue-500 transition-colors">
+                      <Volume2 className="w-6 h-6 sm:w-7 sm:h-7 text-blue-600 group-hover:text-white transition-colors" strokeWidth={2.5} />
+                    </div>
+                    <h2 className="flex-1 text-left font-extrabold text-blue-900 dark:text-blue-100 uppercase text-base sm:text-xl leading-tight">
+                      Susun Suku Katanya!
+                    </h2>
                   </button>
 
-                  <h2 className="text-sm font-extrabold text-slate-500 dark:text-slate-400 mb-6 uppercase tracking-wider">Apa Suku Katanya?</h2>
-
-                  {/* Input slots */}
-                  <div className="flex gap-2 min-h-[80px] w-full justify-center">
-                    {currentQuiz.syllables.map((_, idx) => (
-                      <div key={idx} className={`w-18 h-22 rounded-2xl border-4 flex items-center justify-center shadow-inner transition-all ${
-                        quizInput[idx] ? 'bg-blue-500 border-blue-500 text-white' : 'bg-slate-50 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700'
-                      }`}>
-                        <span className="text-2xl font-black uppercase">{quizInput[idx] || '?'}</span>
-                      </div>
-                    ))}
+                  {/* Hint / Petunjuk Blok - MAXIMIZED VIEW */}
+                  <div className="flex-1 w-full flex items-center justify-center min-h-0 shrink-0">
+                     <div className="flex flex-wrap gap-2 sm:gap-4 justify-center relative px-2">
+                        {currentQuiz.syllables.map((syl, idx) => {
+                          let slotClass = 'bg-slate-50 dark:bg-slate-800/20 border-slate-200 dark:border-slate-700 text-slate-300 dark:text-slate-600 border-dashed';
+                          let IconTemplate = null;
+                          if (quizInput[idx]) {
+                            if (feedback === 'correct') {
+                              slotClass = 'bg-green-50 border-green-200 text-green-600 dark:bg-green-900/30 dark:border-green-800 border-solid shadow-sm';
+                              if (idx === currentQuiz.syllables.length - 1) IconTemplate = <ThumbsUp className="w-5 h-5 text-green-500" />;
+                            } else if (feedback === 'wrong') {
+                              slotClass = 'bg-red-50 border-red-200 text-red-600 dark:bg-red-900/30 dark:border-red-800 border-solid shadow-sm';
+                              if (idx === currentQuiz.syllables.length - 1) IconTemplate = <Frown className="w-5 h-5 text-red-500" />;
+                            } else {
+                              slotClass = 'bg-blue-500 border-blue-600 text-white border-solid shadow-sm';
+                            }
+                          }
+                          
+                          return (
+                            <motion.div 
+                              key={idx} 
+                              animate={quizInput[idx] ? { scale: [1, 1.1, 1] } : {}}
+                              className={`w-[20vh] h-[20vh] max-w-[120px] max-h-[120px] sm:max-w-[150px] sm:max-h-[150px] rounded-[2rem] sm:rounded-[3rem] border-4 flex items-center justify-center transition-all relative ${slotClass}`}
+                            >
+                              <span className={`text-[7vh] sm:text-[9vh] font-black leading-none ${!quizInput[idx] ? 'opacity-20' : ''}`}>
+                                {quizInput[idx] 
+                                   ? (settings.isCapital ? quizInput[idx].toUpperCase() : quizInput[idx].toLowerCase()) 
+                                   : (settings.isCapital ? syl.toUpperCase() : syl.toLowerCase())}
+                              </span>
+                              {IconTemplate && (
+                                <motion.span initial={{ scale: 0 }} animate={{ scale: 1 }} className="absolute -top-3 -right-3 bg-white dark:bg-slate-800 rounded-full shadow-sm p-1 border border-slate-100">
+                                  {IconTemplate}
+                                </motion.span>
+                              )}
+                            </motion.div>
+                          )
+                        })}
+                     </div>
                   </div>
 
-                  {/* Options */}
-                  <div className="grid grid-cols-2 gap-3 w-full max-w-[280px]">
-                    {scrambled.map((syl, idx) => (
+                  {/* Options - DYNAMIC GRID */}
+                  <div className={`grid gap-3 sm:gap-4 w-full shrink-0 px-1 sm:px-0 ${scrambled.length > 4 ? 'grid-cols-3' : 'grid-cols-2'}`}>
+                    {scrambled.map((syl, idx) => {
+                       const isSelected = quizInput.includes(syl);
+                       return (
                        <button
                          key={idx}
                          onClick={() => handleSyllableClick(syl)}
-                         className="h-16 bg-white dark:bg-slate-800 rounded-2xl border-2 border-slate-100 dark:border-slate-700 shadow-sm hover:border-blue-400 dark:hover:border-blue-500 hover:scale-105 active:scale-95 transition-all text-blue-600 dark:text-blue-400 font-extrabold text-2xl uppercase"
+                         disabled={feedback !== 'none' || isSelected}
+                         className={`h-[11vh] min-h-[4.5rem] max-h-[5.5rem] sm:min-h-[5.5rem] rounded-[2rem] sm:rounded-[2.5rem] border-b-4 shadow-sm transition-all font-extrabold text-[4vh] sm:text-4xl flex items-center justify-center
+                           ${isSelected ? 'bg-slate-100 dark:bg-slate-800/20 text-transparent border-transparent scale-95 opacity-50' : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 hover:border-blue-300 hover:-translate-y-1 text-[#3b82f6] dark:text-[#60a5fa] active:scale-95'}`}
                        >
-                         {syl}
+                         <span className="translate-y-1">{settings.isCapital ? syl.toUpperCase() : syl.toLowerCase()}</span>
                        </button>
-                    ))}
+                       );
+                    })}
                   </div>
                   
-                  <Button variant="ghost" onClick={() => setQuizInput([])} className="mt-4 gap-2 text-slate-400">
+                  <Button variant="ghost" onClick={() => setQuizInput([])} disabled={feedback !== 'none'} className="mt-[-8px] gap-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors">
                     <RefreshCcw className="w-4 h-4" /> Reset
                   </Button>
-                </div>
-              </motion.div>
+                </motion.div>
+            </div>
             ) : (
               <div className="flex-1 flex items-center justify-center">
                 <QuizSummary 
@@ -376,7 +427,7 @@ export const VowelModule = () => {
           </div>
         )}
 
-        <FeedbackOverlay type={feedback} />
+        <BottomNav />
       </div>
     </div>
   );

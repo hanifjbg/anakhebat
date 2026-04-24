@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Play, RefreshCcw, Check, Volume2, Sparkles } from 'lucide-react';
+import { ArrowLeft, Play, RefreshCcw, Check, Volume2, Sparkles, ThumbsUp, Frown, RotateCcw } from 'lucide-react';
 import { BottomNav } from '../components/BottomNav';
 import { ModuleCard } from '../components/ModuleCard';
 import { Button } from '../components/ui/Button';
@@ -12,6 +12,7 @@ import { QuizSummary } from '../components/quiz/QuizSummary';
 import { ModuleOverview } from '../components/ModuleOverview';
 import { useApp } from '../contexts/AppContext';
 import { motion, AnimatePresence } from 'motion/react';
+import { TTSEngine } from '../services/TTSEngine';
 
 const sentenceLibrary = [
   [["ma", "ya"], ["su", "ka"], ["sa", "te"]],
@@ -71,22 +72,19 @@ export const SentenceModule = () => {
     if (mode === 'content') markPageCompleted('sentence', contentPage);
   }, [contentPage, mode, markPageCompleted]);
 
-  const speak = useCallback((text: string, id: string) => {
+  const speak = useCallback(async (text: string, id: string) => {
     setActiveItem(id);
-    if ('speechSynthesis' in window) {
-      window.speechSynthesis.cancel();
-      const msg = new SpeechSynthesisUtterance(text.toLowerCase());
-      msg.lang = 'id-ID';
-      msg.rate = 0.8;
-      const userName = appState.user?.name || '';
-      msg.text = text.includes('Luar biasa') ? `${text} ${userName}` : msg.text;
-
-      msg.onend = () => {
-        setActiveItem(prev => prev === id ? null : prev);
-      };
-      window.speechSynthesis.speak(msg);
+    if (!settings.ttsEnabled) {
+      setTimeout(() => setActiveItem(prev => prev === id ? null : prev), 1000);
+      return;
     }
-  }, [appState.user?.name]);
+    
+    await TTSEngine.speak(text, {
+      onEnd: () => {
+        setActiveItem(prev => prev === id ? null : prev);
+      }
+    });
+  }, [settings.ttsEnabled]);
 
   const loadSentenceQuiz = useCallback((item: any) => {
     setCurrentQuiz(item);
@@ -100,10 +98,13 @@ export const SentenceModule = () => {
     setAnswerSlots([]);
     setFeedback('none');
     
-    setTimeout(() => speak(item.target, 'target'), 500);
+    setTimeout(() => {
+      speak(TTSEngine.getQuestionInstruction('sentence', item.target), 'target');
+    }, 500);
   }, [speak]);
 
   const startQuiz = () => {
+    TTSEngine.stop();
     const shuffled = [...quizLibrary].sort(() => 0.5 - Math.random()).slice(0, QUIZ_TOTAL);
     setQuizQueue(shuffled);
     setQuizStep(0);
@@ -113,7 +114,7 @@ export const SentenceModule = () => {
     loadSentenceQuiz(shuffled[0]);
   };
 
-  const handleKeyTap = (key: {id: string, text: string, used: boolean}) => {
+  const handleKeyTap = async (key: {id: string, text: string, used: boolean}) => {
     if (key.used || feedback !== 'none') return;
     
     const newKeypad = shuffledKeypad.map(k => k.id === key.id ? { ...k, used: true } : k);
@@ -121,46 +122,43 @@ export const SentenceModule = () => {
     
     const newAnswers = [...answerSlots, key.text];
     setAnswerSlots(newAnswers);
-    speak(key.text, key.id);
 
     if (newAnswers.length === currentQuiz.splits.length) {
       const targetWord = currentQuiz.splits.join('');
       const isCorrect = newAnswers.join('') === targetWord;
 
-      if (isCorrect) {
-        setFeedback('correct');
-        setQuizScore(prev => prev + 1);
-        speak('Luar biasa! Benar!', 'correct');
-      } else {
-        setFeedback('wrong');
-        speak('Sedikit lagi, coba lagi ya!', 'wrong');
-      }
+      setFeedback(isCorrect ? 'correct' : 'wrong');
+      
+      if (isCorrect) setQuizScore(prev => prev + 1);
 
-      setTimeout(() => {
-        const next = quizStep + 1;
-        if (next < QUIZ_TOTAL) {
-          setQuizStep(next);
-          loadSentenceQuiz(quizQueue[next]);
-        } else {
-          // Handled by effect
-        }
-      }, 2000);
+      const isLastQuestion = quizStep === QUIZ_TOTAL - 1;
+      const isMilestone = (quizStep > 0 && (quizStep + 1) % Math.ceil(QUIZ_TOTAL / 4) === 0);
+      const feedbackText = TTSEngine.getFeedback(isCorrect, currentQuiz.target, appState.user?.name || '', isMilestone, isLastQuestion);
+      
+      await speak(feedbackText, 'feedback');
+
+      const nextStep = quizStep + 1;
+      if (nextStep < QUIZ_TOTAL) {
+        setQuizStep(nextStep);
+        loadSentenceQuiz(quizQueue[nextStep]);
+      } else {
+        setIsQuizFinished(true);
+        const finalScorePercentage = Math.round(((quizScore + (isCorrect ? 1 : 0)) / QUIZ_TOTAL) * 100);
+        const summaryText = TTSEngine.getSummary(finalScorePercentage, appState.user?.name || '');
+        speak(summaryText, 'summary');
+      }
+    } else {
+      speak(key.text, key.id);
     }
   };
 
   useEffect(() => {
-    if (isQuizFinished) saveQuizScore('sentence', quizScore);
+    if (isQuizFinished) saveQuizScore('sentence', Math.round((quizScore / QUIZ_TOTAL) * 100));
   }, [isQuizFinished, quizScore, saveQuizScore]);
 
   useEffect(() => {
-    if (feedback !== 'none' && !isQuizFinished) {
-      const timer = setTimeout(() => {
-        const nextStep = quizStep + 1;
-        if (nextStep >= QUIZ_TOTAL) setIsQuizFinished(true);
-      }, 2000);
-      return () => clearTimeout(timer);
-    }
-  }, [feedback, isQuizFinished, quizStep, QUIZ_TOTAL]);
+    return () => TTSEngine.stop();
+  }, []);
 
   const handleReset = () => {
     setShuffledKeypad(shuffledKeypad.map(k => ({ ...k, used: false })));
@@ -189,7 +187,7 @@ export const SentenceModule = () => {
       <div className="w-full md:max-w-[400px] h-[100dvh] md:h-[calc(100dvh-32px)] bg-[#f8f9fe] dark:bg-slate-900 md:rounded-[40px] shadow-2xl relative overflow-hidden flex flex-col pt-10">
         
         {/* Header */}
-        <div className="px-6 flex items-center justify-between mb-6 shrink-0 z-10 w-full">
+        <div className="px-6 flex items-center justify-between mb-6 shrink-0 relative z-50 w-full">
            <button onClick={() => setMode('overview')} className="w-10 h-10 bg-white dark:bg-slate-800 rounded-full flex items-center justify-center shadow-sm hover:scale-105 active:scale-95 transition-transform">
              <ArrowLeft className="w-5 h-5 text-slate-700 dark:text-slate-300" strokeWidth={2.5} />
            </button>
@@ -207,7 +205,7 @@ export const SentenceModule = () => {
             header={
               <h3 className="font-extrabold text-[#10b981] mb-0 uppercase tracking-wider text-xs text-center">Ayo Membaca!</h3>
             }
-            contentClassName={`flex flex-col items-center justify-center h-full w-full max-w-sm mx-auto gap-8 ${settings.fontType === 'comic' ? 'font-comic' : settings.fontType === 'quicksand' ? 'font-quicksand' : 'font-sans'}`}
+            contentClassName={`items-center justify-center w-full max-w-sm mx-auto gap-8 ${settings.fontType === 'comic' ? 'font-comic' : settings.fontType === 'quicksand' ? 'font-quicksand' : 'font-sans'}`}
             actionButton={<></>}
           >
             <div className="flex flex-col items-center justify-center gap-8 py-4">
@@ -251,74 +249,113 @@ export const SentenceModule = () => {
         )}
 
         {mode === 'quiz' && (
-          <div className="flex-1 flex flex-col p-6 overflow-y-auto shrink-0 relative pb-24">
+          <div className={`flex-1 flex flex-col px-6 overflow-y-auto overflow-x-hidden shrink-0 relative pb-[120px] no-scrollbar pt-2 ${settings.fontType === 'comic' ? 'font-comic' : settings.fontType === 'quicksand' ? 'font-quicksand' : 'font-sans'}`}>
             {!isQuizFinished ? (
-              <motion.div 
-                key={quizStep}
-                initial={{ opacity: 0, x: 20 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -20 }}
-                className="flex-1 flex flex-col"
-              >
+              <div className="flex-1 flex flex-col">
                 <QuizProgress current={quizStep + 1} total={QUIZ_TOTAL} color="bg-green-500" />
-                
-                <div className="flex-1 flex flex-col items-center justify-center gap-6">
-                  <div className="flex flex-col items-center gap-2">
-                    <button 
-                      onClick={() => speak(currentQuiz.target, 'target')}
-                      className="w-20 h-20 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center shadow-lg border-4 border-white dark:border-slate-800 hover:scale-110 active:scale-90 transition-transform group"
-                    >
-                      <Volume2 className="w-8 h-8 text-green-600" />
-                    </button>
-                    <h2 className="text-center font-extrabold text-slate-800 dark:text-white uppercase text-xl">
-                      {currentQuiz.target}
+                <motion.div 
+                  key={quizStep}
+                  initial={{ opacity: 0, x: 20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: -20 }}
+                  className="flex-1 flex flex-col items-center gap-6 min-h-0 py-4 relative"
+                >
+                  <AnimatePresence>
+                    {feedback !== 'none' && (
+                      <motion.div 
+                        initial={{ opacity: 0, y: -50, scale: 0.9 }} 
+                        animate={{ opacity: 1, y: 0, scale: 1 }} 
+                        exit={{ opacity: 0, y: -20, scale: 0.9 }}
+                        className={`fixed top-24 left-4 right-4 md:left-1/2 md:-translate-x-1/2 md:w-full md:max-w-lg z-50 py-4 px-6 rounded-3xl font-bold text-center text-white shadow-2xl flex items-center justify-center gap-3 border-4 border-white/20 backdrop-blur-sm ${feedback === 'correct' ? 'bg-green-500' : 'bg-red-500'}`}
+                      >
+                         {feedback === 'correct' ? <ThumbsUp className="w-7 h-7 sm:w-8 sm:h-8" /> : <Frown className="w-7 h-7 sm:w-8 sm:h-8" />}
+                        <span className="text-lg sm:text-xl drop-shadow-sm">{feedback === 'correct' ? 'Hebat! Jawabanmu Benar' : `Kurang tepat, yang benar adalah ${settings.isCapital ? currentQuiz.target.toUpperCase() : currentQuiz.target.toLowerCase()}`}</span>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+
+                  {/* Sound & Instruction Banner */}
+                  <button 
+                    onClick={() => speak(TTSEngine.getQuestionInstruction('sentence', currentQuiz.target), 'target')}
+                    className="w-full bg-green-100 dark:bg-green-900/30 border-2 border-green-200 dark:border-green-800 rounded-3xl p-3 sm:p-4 flex items-center gap-4 hover:scale-[1.02] active:scale-[0.98] transition-transform shadow-sm group shrink-0"
+                  >
+                    <div className="w-12 h-12 sm:w-14 sm:h-14 bg-white dark:bg-slate-800 rounded-full flex items-center justify-center shrink-0 shadow-sm group-hover:bg-green-500 transition-colors">
+                      <Volume2 className="w-6 h-6 sm:w-7 sm:h-7 text-green-600 group-hover:text-white transition-colors" strokeWidth={2.5} />
+                    </div>
+                    <h2 className="flex-1 text-left font-extrabold text-green-900 dark:text-green-100 uppercase text-base sm:text-xl leading-tight">
+                      Susun Kalimatnya!
                     </h2>
-                  </div>
-                  
-                  {/* Answer Slots Display */}
-                  <div className="min-h-[100px] w-full bg-white dark:bg-slate-800/50 rounded-3xl p-6 shadow-inner flex flex-wrap gap-2 justify-center items-center mb-4 border-2 border-slate-100 dark:border-slate-700 relative">
+                  </button>
+
+                  {/* Answer Slots Display (Petunjuk Visual) - MAXIMIZED VIEW */}
+                  <div className="flex-1 w-full min-h-0 bg-slate-50 dark:bg-slate-800/20 rounded-[2.5rem] p-4 sm:p-6 shadow-inner flex flex-wrap gap-2 sm:gap-4 justify-center items-center content-center shrink-0 border-4 border-dashed border-slate-200 dark:border-slate-700 relative">
                     <AnimatePresence>
-                      {answerSlots.map((slot, i) => (
+                      {currentQuiz.splits.map((expectedText: string, i: number) => {
+                         const isFilled = i < answerSlots.length;
+                         const slotText = isFilled ? answerSlots[i] : expectedText;
+                         
+                         let slotClass = 'bg-slate-200/50 dark:bg-slate-700/50 text-slate-300 dark:text-slate-600 border-2 border-slate-300 dark:border-slate-600 border-dashed'; // Default empty
+                         
+                         if (isFilled) {
+                           if (feedback === 'wrong') slotClass = 'bg-red-500 text-white border-red-600 border-b-4 border-solid shadow-sm';
+                           else if (feedback === 'correct') slotClass = 'bg-green-500 text-white border-green-600 border-b-4 border-solid shadow-sm';
+                           else slotClass = 'bg-green-500 text-white border-green-600 border-b-4 border-solid shadow-sm';
+                         }
+
+                         let IconTemplate = null;
+                         if (isFilled && i === currentQuiz.splits.length - 1 && feedback !== 'none') {
+                           if (feedback === 'correct') IconTemplate = <ThumbsUp className="w-5 h-5 text-green-500" />;
+                           if (feedback === 'wrong') IconTemplate = <Frown className="w-5 h-5 text-red-500" />;
+                         }
+
+                         return (
                         <motion.div 
-                          key={`${slot}-${i}`} 
-                          initial={{ scale: 0, y: 10 }} 
-                          animate={{ scale: 1, y: 0 }}
-                          exit={{ scale: 0 }}
-                          className="bg-green-500 text-white px-5 py-2.5 rounded-2xl text-2xl font-black shadow-sm"
+                          key={`slot-${i}`} 
+                          animate={isFilled ? { scale: [1, 1.1, 1] } : {}}
+                          className={`${slotClass} px-4 py-3 sm:px-6 sm:py-5 rounded-2xl sm:rounded-[2rem] text-[4vh] sm:text-4xl font-black relative flex items-center justify-center min-w-[80px] sm:min-w-[100px] transition-colors`}
                         >
-                          {slot}
+                          <span className={`translate-y-1 leading-none ${!isFilled ? 'opacity-30' : ''}`}>
+                            {settings.isCapital ? slotText.toUpperCase() : slotText.toLowerCase()}
+                          </span>
+                          {IconTemplate && (
+                            <motion.span initial={{ scale: 0 }} animate={{ scale: 1 }} className="absolute -top-3 -right-3 bg-white dark:bg-slate-800 rounded-full shadow-sm p-1 border border-slate-100">
+                              {IconTemplate}
+                            </motion.span>
+                          )}
                         </motion.div>
-                      ))}
+                         );
+                      })}
                     </AnimatePresence>
-                    {answerSlots.length === 0 && <span className="text-slate-300 dark:text-slate-600 font-bold italic">Ketuk kepingan di bawah...</span>}
                   
-                    {answerSlots.length > 0 && feedback === 'none' && (
-                      <button onClick={handleReset} className="absolute -bottom-3 right-4 w-10 h-10 bg-white dark:bg-slate-800 shadow-lg rounded-full flex items-center justify-center text-slate-500 hover:text-red-500 border border-slate-100 dark:border-slate-700 transition-colors">
-                        <RefreshCcw className="w-4 h-4" />
+                    {(feedback === 'none' && answerSlots.length > 0) && (
+                      <button 
+                        onClick={handleReset}
+                        className="absolute bottom-4 right-4 bg-white dark:bg-slate-800 text-slate-400 p-3 sm:p-4 rounded-full shadow-lg border border-slate-200 dark:border-slate-700 hover:text-red-500 hover:scale-110 active:scale-90 transition-all z-10"
+                      >
+                        <RotateCcw className="w-6 h-6" />
                       </button>
                     )}
                   </div>
 
-                  {/* Shuffled Keys */}
-                  <div className="grid grid-cols-2 gap-3 w-full max-w-[320px]">
+                  {/* Shuffled Keys (Jawaban) - DYNAMIC FLEX/GRID */}
+                  <div className="flex flex-wrap justify-center gap-3 sm:gap-4 w-full shrink-0 px-1 sm:px-0">
                     {shuffledKeypad.map((key) => (
                       <button
                         key={key.id}
-                        disabled={key.used}
+                        disabled={key.used || feedback !== 'none'}
                         onClick={() => handleKeyTap(key)}
-                        className={`h-16 rounded-2xl border-2 flex items-center justify-center font-black text-2xl transition-all
+                        className={`h-[11vh] min-h-[4.5rem] max-h-[5.5rem] px-4 min-w-[70px] sm:min-w-[90px] flex-grow basis-[28%] sm:basis-[22%] max-w-[160px] rounded-[2rem] sm:rounded-[2.5rem] border-b-4 flex items-center justify-center font-black text-[4vh] sm:text-4xl transition-all
                           ${key.used 
-                            ? 'bg-slate-50 dark:bg-slate-800/20 border-transparent text-transparent scale-90' 
-                            : 'bg-white dark:bg-slate-800 text-green-600 border-slate-100 dark:border-slate-700 shadow-sm hover:border-green-400 active:scale-95'
-                          }
-                        `}
+                            ? 'bg-slate-100 dark:bg-slate-800/20 text-transparent border-transparent scale-95 opacity-50' 
+                            : 'bg-white dark:bg-slate-800 text-[#16a34a] dark:text-[#4ade80] border-slate-200 dark:border-slate-700 shadow-sm hover:border-green-300 hover:-translate-y-1 active:scale-95'
+                          }`}
                       >
-                        {key.text}
+                        <span className="translate-y-1">{settings.isCapital ? key.text.toUpperCase() : key.text.toLowerCase()}</span>
                       </button>
                     ))}
                   </div>
-                </div>
-              </motion.div>
+                </motion.div>
+            </div>
             ) : (
               <div className="flex-1 flex items-center justify-center">
                 <QuizSummary 
@@ -332,7 +369,7 @@ export const SentenceModule = () => {
           </div>
         )}
 
-        <FeedbackOverlay type={feedback} />
+        <BottomNav />
       </div>
     </div>
   );

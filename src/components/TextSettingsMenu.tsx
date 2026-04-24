@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Type, Plus, Minus, X } from 'lucide-react';
+import { Type, Plus, Minus, X, Volume2, VolumeX } from 'lucide-react';
 import { useSettings, FontType, SizeType } from '../contexts/SettingsContext';
 
 export const TextSettingsMenu = () => {
@@ -17,7 +17,7 @@ export const TextSettingsMenu = () => {
   };
 
   return (
-    <div className="relative">
+    <div className="relative z-[100]">
       <button 
         onClick={() => setIsOpen(!isOpen)}
         className="w-10 h-10 bg-white dark:bg-slate-800 text-slate-500 rounded-full flex items-center justify-center shadow-sm border border-slate-100 dark:border-slate-700 hover:scale-105 active:scale-95 transition-transform"
@@ -77,7 +77,7 @@ export const TextSettingsMenu = () => {
               </div>
             </div>
 
-            <div className="space-y-2">
+            <div className="space-y-2 mb-4">
               <label className="text-xs font-bold text-slate-500 uppercase">Jenis Font</label>
               <div className="space-y-1">
                 {(['comic', 'quicksand', 'inter'] as FontType[]).map((font) => (
@@ -101,6 +101,26 @@ export const TextSettingsMenu = () => {
                   </button>
                 ))}
               </div>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-xs font-bold text-slate-500 uppercase">Suara (TTS)</label>
+              <button
+                onClick={() => updateSettings({ ttsEnabled: !settings.ttsEnabled })}
+                className={`w-full py-3 px-3 rounded-xl text-left border transition-all flex items-center justify-between ${
+                  settings.ttsEnabled 
+                    ? 'border-[#8b5cf6] bg-purple-50 dark:bg-purple-900/10 text-[#8b5cf6]' 
+                    : 'border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700/50 text-slate-600 dark:text-slate-300'
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  {settings.ttsEnabled ? <Volume2 className="w-5 h-5" /> : <VolumeX className="w-5 h-5" />}
+                  <span className="font-bold">{settings.ttsEnabled ? 'Aktif' : 'Nonaktif'}</span>
+                </div>
+                <div className={`w-10 h-6 rounded-full p-1 transition-colors ${settings.ttsEnabled ? 'bg-[#8b5cf6]' : 'bg-slate-300 dark:bg-slate-600'}`}>
+                  <div className={`w-4 h-4 rounded-full bg-white transition-transform ${settings.ttsEnabled ? 'translate-x-4' : 'translate-x-0'}`} />
+                </div>
+              </button>
             </div>
 
           </div>

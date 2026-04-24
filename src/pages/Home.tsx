@@ -53,7 +53,7 @@ export const Home = () => {
         {/* Decorative Blob */}
         <div className="absolute top-[-10%] right-[-5%] w-64 h-64 bg-purple-300/30 dark:bg-purple-900/20 rounded-full blur-3xl pointer-events-none" />
         
-        <div className="flex-1 overflow-y-auto px-6 pb-24 no-scrollbar z-10">
+        <div className="flex-1 overflow-y-auto px-6 pb-[120px] no-scrollbar z-10">
           
           {/* Header Profile */}
           <div className="flex justify-between items-center mb-8 pt-4">
