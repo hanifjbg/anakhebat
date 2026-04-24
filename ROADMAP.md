@@ -20,5 +20,19 @@ Dokumen ini berisi daftar fitur dan perbaikan UI yang akan dieksekusi selanjutny
 ## 🎮 4. Minigames (Penyegaran)
 - [ ] **Mini Game Break:** Game sederhana (misal: pecahkan balon huruf terbang, puzzle gambar sederhana) yang terbuka setelah anak belajar selama 15 menit berturut-turut. Tujuannya agar tidak bosan.
 
+## 🌍 5. Alur Pengguna & Sistem Akun (Baru Ditambahkan)
+Berdasarkan rencana pengembangan terbaru, alur (*flow*) pengguna akan diekspansi menjadi seperti berikut:
+- [ ] **Splash Screen Wizard (Onboarding):** Layar sambutan awal untuk pertama kali kunjungan, menjelaskan aplikasi kepada orang tua.
+- [ ] **Login Akun Orang Tua (Google OAuth):** Sistem autentikasi utama. Data anak nantinya akan disimpan dan terikat pada akun *parent* ini untuk mencegah kehilangan progres.
+- [ ] **Keamanan PIN (Parental Gate):** Orang tua dapat mengatur PIN sehingga anak tidak dapat mengubah pengaturan/profil tanpa izin.
+- [ ] **Manajemen Profil Anak:** Setelah login orang tua, dilanjutkan dengan menginput nama anak. (Infrastruktur disiapkan agar 1 *Parent* bisa memiliki banyak profil Anak untuk pengembangan selanjutnya).
+- [ ] **Avatar & Kamera Selfie (Sistem Raport):** Saat membuat/mengatur profil, selain bisa mengacak avatar (Random Dice), akan ada opsi *Take a Picture*. Sistem tidak menggunakan *inline canvas/webcam API* demi menjaga privasi, melainkan akan membuka aplikasi kamera bawaan perangkat secara *native* (`<input type="file" accept="image/*" capture="user">`). Setelah dijepret dan dicentang (konfirmasi OS), foto akan di-*upload*. Foto ini krusial untuk dimasukkan ke dalam **Sistem Raport**.
+- [ ] **Global Leaderboard:** Menampilkan papan skor peringkat untuk semua siswa secara global untuk menambah elemen kompetitif dan motivasi.
+
+## 🛠️ 6. Super Admin & Platform CMS (Future Scope)
+- [ ] **Super Admin Dashboard:** Panel kontrol khusus *developer/admin*.
+- [ ] **Manajemen Konfigurasi:** Mengatur *global settings*, meracik sistem poin (*reward system*).
+- [ ] **Bank Data Soal Dinamis:** Menambah dan mengelola bank data soal secara *(over-the-air)* tanpa harus melakukan *deploy* ulang source code; harus terpikirkan dari segi desain *database* (Firestore/BaaS).
+
 ---
-*Catatan: Fokus utama besok adalah menyelesaikan sistem Profil, Progress, dan Reward terlebih dahulu, baru menyempurnakan UI/UX Score Card.*
+*Catatan: Fokus utama adalah menyiapkan infrastruktur yang mendasari sistem Profil, Progress, dan Reward, lalu menyiapkan BaaS (seperti Firebase) untuk OAuth, Database (profil & soal), serta Cloud Storage untuk foto selfie profil anak.*
